@@ -1,0 +1,8 @@
+mysql_connector_python
+numpy==2.0.0
+pandas==2.2.2
+pyowm==3.3.0
+pytz==2024.1
+Requests==2.32.3
+schedule==1.2.2
+SQLAlchemy==2.0.30

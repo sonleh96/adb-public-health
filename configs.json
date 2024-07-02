@@ -1,0 +1,22 @@
+{
+    "credentials": {
+        "owm_api_key": "ac31e02046794bd3f959fbc98fc25231",
+        "database": {
+        "user": "admin_son",
+        "pwd": "Lehs11728713!",
+        "host": "127.0.0.1",
+        "port": 3306,
+        "database": "ADB_Health"
+        }
+    },
+
+    "sql_queries": {
+        "students":  "SELECT * FROM students WHERE TREATMENT = 'YES' LIMIT 20"
+    },
+
+    "main": {
+        "breakpoint_steps": 30,
+        "timezone": "Asia/Ho_Chi_Minh",
+        "job_time": "7:00:00"
+    }
+}
