@@ -26,6 +26,9 @@ class DataExtractor():
         self.db, self.sqlach_engine = self._connect_db()
         self.students_dict = self._get_student_dict()
 
+        self.rt_error_list = []
+        self.fc_error_list = []
+
         
     
     def _connect_db(self):
@@ -182,7 +185,7 @@ class DataExtractor():
                 return (I_high - I_low) / (C_high - C_low) * (concentration - C_low) + I_low
             
 
-    def get_rt(self, student_ids: list) -> pd.DataFrame:
+    def get_rt(self, student_ids: list):
         """
         This method takes the list of survey partcipants by their student ids and computes the corresponding current AQI.
         The results are encapsulated in a pandas dataframe
@@ -198,31 +201,37 @@ class DataExtractor():
         for id in student_ids:
             r_air = self._extract_from_owm(id, request_type='current_air')
 
+            if r_air['list'] is not None:
+                pm25 = [r_air['list'][0]['components']['pm2_5']]
+                dt = [r_air['list'][0]['dt']]
+                
+                df = pd.DataFrame({'STUDENT_ID': r_air['STUDENT_ID'],
+                                'LAT': r_air['coord']['lat'],
+                                'LON': r_air['coord']['lon'],
+                                'DT_UNIX': dt,
+                                'PM25': pm25})
 
-            pm25 = [r_air['list'][0]['components']['pm2_5']]
-            dt = [r_air['list'][0]['dt']]
-            
-            df = pd.DataFrame({'STUDENT_ID': r_air['STUDENT_ID'],
-                            'LAT': r_air['coord']['lat'],
-                            'LON': r_air['coord']['lon'],
-                            'DT_UNIX': dt,
-                            'PM25': pm25})
+                dfs.append(df)
+            else:
+                self.logger.error(f'No current air information extracted for student_id {id}')
+                self.rt_error_list.append(id)
 
-            dfs.append(df)
+        if len(dfs) > 0:
+            df_rt = pd.concat(dfs, axis=0).reset_index(drop=True)
 
-        df_rt = pd.concat(dfs, axis=0).reset_index(drop=True)
+            df_rt['DT'] = pd.to_datetime(df_rt['DT_UNIX'],unit='s')
+            df_rt['DT'] = df_rt['DT'].dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
 
-        df_rt['DT'] = pd.to_datetime(df_rt['DT_UNIX'],unit='s')
-        df_rt['DT'] = df_rt['DT'].dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
+            df_rt = df_rt.drop(['DT_UNIX'], axis=1)
+            df_rt = df_rt[['STUDENT_ID', 'LAT', 'LON', 'DT', 'PM25']]
 
-        df_rt = df_rt.drop(['DT_UNIX'], axis=1)
-        df_rt = df_rt[['STUDENT_ID', 'LAT', 'LON', 'DT', 'PM25']]
-
-        df_rt = self._format_concentration(df_rt, 'current')
-        df_rt['AQI_CURRENT'] = np.round(df_rt['PM25'].apply(lambda x: self._calculate_aqi(x)), 0)
-        df_rt['AQI_CURRENT'] = df_rt['AQI_CURRENT'].astype(int)
+            df_rt = self._format_concentration(df_rt, 'current')
+            df_rt['AQI_CURRENT'] = np.round(df_rt['PM25'].apply(lambda x: self._calculate_aqi(x)), 0)
+            df_rt['AQI_CURRENT'] = df_rt['AQI_CURRENT'].astype(int)
         
-        return df_rt
+            return df_rt
+        else:
+            return 
 
 
     def get_fc(self, student_ids: list) -> pd.DataFrame:
@@ -241,36 +250,43 @@ class DataExtractor():
 
             r_forecast = self._extract_from_owm(id, request_type='forecast_air')
 
-            pm25_today = [x['components']['pm2_5'] for x in r_forecast['list'][:23]]
-            dt_today = [x['dt'] for x in r_forecast['list'][:23]]
+            if r_forecast['list'] is not None:
+                pm25_today = [x['components']['pm2_5'] for x in r_forecast['list'][:23]]
+                dt_today = [x['dt'] for x in r_forecast['list'][:23]]
 
-            pm25_next_day = [x['components']['pm2_5'] for x in r_forecast['list'][23:46]]
-            dt_next_day = [x['dt'] for x in r_forecast['list'][23:46]]
+                pm25_next_day = [x['components']['pm2_5'] for x in r_forecast['list'][23:46]]
+                dt_next_day = [x['dt'] for x in r_forecast['list'][23:46]]
 
-            df = pd.DataFrame({'STUDENT_ID': r_forecast['STUDENT_ID'],
-                                'LAT': r_forecast['coord']['lat'],
-                                'LON': r_forecast['coord']['lon'],
-                                'DT_TODAY': dt_today,
-                                'PM25_TODAY': pm25_today,
-                                'DT_NEXT_DAY': dt_next_day,
-                                'PM25_NEXT_DAY': pm25_next_day})
-            
-            dfs.append(df)
+                df = pd.DataFrame({'STUDENT_ID': r_forecast['STUDENT_ID'],
+                                    'LAT': r_forecast['coord']['lat'],
+                                    'LON': r_forecast['coord']['lon'],
+                                    'DT_TODAY': dt_today,
+                                    'PM25_TODAY': pm25_today,
+                                    'DT_NEXT_DAY': dt_next_day,
+                                    'PM25_NEXT_DAY': pm25_next_day})
+                
+                dfs.append(df)
+            else:
+                self.logger.error(f'No forecast air information extracted for student_id {id}')
+                self.fc_error_list.append(id)
 
-        df_fc = pd.concat(dfs, axis=0).reset_index(drop=True)
+        if len(dfs) > 0:
+            df_fc = pd.concat(dfs, axis=0).reset_index(drop=True)
 
-        df_fc['DT_TODAY'] = pd.to_datetime(df_fc['DT_TODAY'],unit='s')
-        df_fc['DT_TODAY'] = df_fc['DT_TODAY'].dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
-        df_fc['DT_NEXT_DAY'] = pd.to_datetime(df_fc['DT_NEXT_DAY'],unit='s')
-        df_fc['DT_NEXT_DAY'] = df_fc['DT_NEXT_DAY'].dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
+            df_fc['DT_TODAY'] = pd.to_datetime(df_fc['DT_TODAY'],unit='s')
+            df_fc['DT_TODAY'] = df_fc['DT_TODAY'].dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
+            df_fc['DT_NEXT_DAY'] = pd.to_datetime(df_fc['DT_NEXT_DAY'],unit='s')
+            df_fc['DT_NEXT_DAY'] = df_fc['DT_NEXT_DAY'].dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
 
-        df_fc = self._format_concentration(df_fc, 'forecast')
-        df_fc['AQI_TODAY'] = np.round(df_fc['PM25_TODAY'].apply(lambda x: self._calculate_aqi(x)), 0)
-        df_fc['AQI_NEXT_DAY'] = np.round(df_fc['PM25_NEXT_DAY'].apply(lambda x: self._calculate_aqi(x)), 0)
+            df_fc = self._format_concentration(df_fc, 'forecast')
+            df_fc['AQI_TODAY'] = np.round(df_fc['PM25_TODAY'].apply(lambda x: self._calculate_aqi(x)), 0)
+            df_fc['AQI_NEXT_DAY'] = np.round(df_fc['PM25_NEXT_DAY'].apply(lambda x: self._calculate_aqi(x)), 0)
 
-        df_fc = df_fc.groupby(['STUDENT_ID', 'LAT', 'LON']).agg({'AQI_TODAY': 'mean', 
-                                                                   'AQI_NEXT_DAY': 'mean'}).reset_index()
-        df_fc['AQI_TODAY'] = np.round(df_fc['AQI_TODAY']).astype(int)
-        df_fc['AQI_NEXT_DAY'] = np.round(df_fc['AQI_NEXT_DAY']).astype(int)
+            df_fc = df_fc.groupby(['STUDENT_ID', 'LAT', 'LON']).agg({'AQI_TODAY': 'mean', 
+                                                                    'AQI_NEXT_DAY': 'mean'}).reset_index()
+            df_fc['AQI_TODAY'] = np.round(df_fc['AQI_TODAY']).astype(int)
+            df_fc['AQI_NEXT_DAY'] = np.round(df_fc['AQI_NEXT_DAY']).astype(int)
 
-        return df_fc[['STUDENT_ID', 'AQI_TODAY', 'AQI_NEXT_DAY']]
+            return df_fc[['STUDENT_ID', 'AQI_TODAY', 'AQI_NEXT_DAY']]
+        else:
+            return

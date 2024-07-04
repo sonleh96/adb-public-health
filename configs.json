@@ -11,7 +11,7 @@
     },
 
     "sql_queries": {
-        "students":  "SELECT * FROM students WHERE TREATMENT = 'YES' LIMIT 20"
+        "students":  "SELECT * FROM students WHERE TREATMENT = 'YES' LIMIT 15"
     },
 
     "main": {

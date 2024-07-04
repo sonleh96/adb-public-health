@@ -43,7 +43,7 @@ def main():
     rt = pd.concat(dfs_rt, axis=0).reset_index(drop=True)
     fc = pd.concat(dfs_fc, axis=0).reset_index(drop=True)
 
-    full = pd.merge(rt, fc, on=['STUDENT_ID'], how='left')
+    full = pd.merge(rt, fc, on=['STUDENT_ID'], how='outer')
 
     df_insert = full[['STUDENT_ID', 'LAT', 'LON', 'DT', 'AQI_CURRENT',
                       'AQI_TODAY', 'AQI_NEXT_DAY']]
@@ -58,8 +58,11 @@ def main():
     extractor.db.commit()
 
     t1 = time.time()
+    extractor.logger.info(f'Could not retrieve current AQI for {extractor.rt_error_list}')
+    extractor.logger.info(f'Could not retrieve current AQI for {extractor.fc_error_list}')
     extractor.logger.info(f'Extraction ended at {t1}')
     extractor.logger.info(f'Execution time: {t1 - t0}')
+    
 
 
 if __name__ == '__main__':
