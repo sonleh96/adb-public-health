@@ -28,8 +28,7 @@ class DataExtractor():
 
         
     
-    def _connect_db(self) -> Tuple[mysql.connector.connection_cext.CMySQLConnection,
-                                   sqlalchemy.engine.base.Engine]:
+    def _connect_db(self):
         """
         This internal method connects to the MySQL database that stores survey participants' information 
         and the subsequent AQI calculations 
