@@ -1,9 +1,11 @@
 misc/
 docs/
 package/
+__pycache__/
 
 AQI_extractor.zip
 
 backend_demo.ipynb
 openweather.ipynb
 
+.gitignore
